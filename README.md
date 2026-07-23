@@ -59,16 +59,25 @@ python -m main
 ## 部署到金山云服务器
 
 ```bash
-# 安装并注册 systemd 服务
-sudo bash scripts/install.sh
+# 首次部署：克隆仓库并运行安装脚本
+git clone <你的仓库> && cd gpu-node-inspector && sudo bash scripts/install.sh
+```
 
-# 启动并查看状态
+初次安装会创建 `/var/lib/gpu-node-inspector/` 作为 SQLite 数据目录，并通过符号链接将该路径挂载到安装目录。重装或更新时不会覆盖历史数据。
+
+```bash
+# 后续更新：拉取最新代码并重新安装
+cd gpu-node-inspector && sudo bash scripts/update.sh
+```
+
+```bash
+# 启动、查看状态并设置为开机自启
 sudo systemctl start gpu-node-inspector
 sudo systemctl status gpu-node-inspector
-
-# 设置为开机自启
 sudo systemctl enable gpu-node-inspector
 ```
+
+SQLite 数据库在服务器上的实际路径为 `/var/lib/gpu-node-inspector/inspector.db`。
 
 ## 查看日志
 

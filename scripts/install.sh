@@ -29,7 +29,20 @@ fi
 # Install directory
 mkdir -p "$INSTALL_DIR"
 cp -r "$PROJECT_DIR/inspector" "$PROJECT_DIR/main.py" "$PROJECT_DIR/requirements.txt" "$PROJECT_DIR/pyproject.toml" "$PROJECT_DIR/templates" "$INSTALL_DIR/"
-mkdir -p "$INSTALL_DIR"/data "$INSTALL_DIR"/logs
+
+# External data directory so reinstalls never overwrite historical SQLite data
+DATA_DIR="/var/lib/gpu-node-inspector"
+mkdir -p "$DATA_DIR"
+chown "$USER:$USER" "$DATA_DIR"
+
+if [ -d "$INSTALL_DIR/data" ] && [ ! -L "$INSTALL_DIR/data" ]; then
+    echo "Migrating existing data from $INSTALL_DIR/data to $DATA_DIR..."
+    cp -a "$INSTALL_DIR/data/"* "$DATA_DIR/" 2>/dev/null || true
+    rm -rf "$INSTALL_DIR/data"
+fi
+ln -sfn "$DATA_DIR" "$INSTALL_DIR/data"
+
+mkdir -p "$INSTALL_DIR"/logs
 chown -R "$USER:$USER" "$INSTALL_DIR"
 
 # Config directory
