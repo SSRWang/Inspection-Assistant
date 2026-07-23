@@ -11,6 +11,13 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# Python version check
+PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
+if [[ $(echo -e "3.9\n$PYTHON_VERSION" | sort -V | head -n1) != "3.9" ]]; then
+    echo "Python >= 3.9 is required, found $PYTHON_VERSION"
+    exit 1
+fi
+
 # Create user
 if ! id "$USER" &>/dev/null; then
     useradd --system --no-create-home --home-dir "$INSTALL_DIR" "$USER"
