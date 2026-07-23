@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 INSTALL_DIR="/opt/gpu-node-inspector"
 CONFIG_DIR="/etc/gpu-node-inspector"
 LOG_DIR="/var/log/gpu-node-inspector"
@@ -25,14 +28,14 @@ fi
 
 # Install directory
 mkdir -p "$INSTALL_DIR"
-cp -r inspector main.py requirements.txt pyproject.toml templates "$INSTALL_DIR/"
+cp -r "$PROJECT_DIR/inspector" "$PROJECT_DIR/main.py" "$PROJECT_DIR/requirements.txt" "$PROJECT_DIR/pyproject.toml" "$PROJECT_DIR/templates" "$INSTALL_DIR/"
 mkdir -p "$INSTALL_DIR"/data "$INSTALL_DIR"/logs
 chown -R "$USER:$USER" "$INSTALL_DIR"
 
 # Config directory
 mkdir -p "$CONFIG_DIR"
 if [ ! -f "$CONFIG_DIR/config.yaml" ]; then
-    cp config.example.yaml "$CONFIG_DIR/config.yaml"
+    cp "$PROJECT_DIR/config.example.yaml" "$CONFIG_DIR/config.yaml"
     echo "Please edit $CONFIG_DIR/config.yaml"
 fi
 if [ ! -f "$CONFIG_DIR/env" ]; then
@@ -42,6 +45,7 @@ if [ ! -f "$CONFIG_DIR/env" ]; then
     echo "Please edit $CONFIG_DIR/env with secrets"
 fi
 chmod 600 "$CONFIG_DIR/config.yaml"
+chown "$USER:$USER" "$CONFIG_DIR/config.yaml"
 
 # Log directory
 mkdir -p "$LOG_DIR"
@@ -75,7 +79,7 @@ WantedBy=multi-user.target
 EOF
 
 # Logrotate
-cp scripts/logrotate.conf /etc/logrotate.d/gpu-node-inspector
+cp "$SCRIPT_DIR/logrotate.conf" /etc/logrotate.d/gpu-node-inspector
 
 # SSH key permissions hint
 echo "Ensure your SSH private key files are chmod 600 and owned by $USER"
