@@ -50,9 +50,9 @@ class NodeConfig(BaseModel):
 
 
 class AlertRules(BaseModel):
-    gpu_temp_c: float = 85.0
-    gpu_memory_pct: float = 90.0
-    disk_usage_pct: float = 85.0
+    gpu_temp_c: float | None = 85.0
+    gpu_memory_pct: float | None = 90.0
+    disk_usage_pct: float | None = 85.0
     node_unreachable: bool = True
     stability_cycles: int = Field(default=2, ge=1)
 

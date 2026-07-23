@@ -47,7 +47,9 @@ class Alerter:
 
         if is_breach:
             cycles += 1
-            if cycles >= self.rules.stability_cycles and state != "triggered":
+            if state == "triggered":
+                await self.store.update_alert_state(node, rule, "triggered", cycles, float(value) if isinstance(value, (int, float)) else None)
+            elif cycles >= self.rules.stability_cycles:
                 events.append(AlertEvent(
                     type="alert_triggered",
                     node=node,
