@@ -1,6 +1,5 @@
-import asyncio
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from inspector.alerter import Alerter
 from inspector.collector import Collector
 from inspector.config import AlertRules, NodeConfig, NotificationsConfig, Settings, StorageConfig

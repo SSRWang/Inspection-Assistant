@@ -3,12 +3,18 @@ import re
 from inspector.models import GpuMetric, NetworkMetric, NodeMetrics, SystemMetric
 
 
+_FLOAT_RE = re.compile(r"^-?\d+(?:\.\d+)?$")
+
+
 def _to_float(value: str) -> float | None:
     value = value.strip()
     if value in ("", "N/A", "Unknown", "[Not Supported]"):
         return None
-    # Remove units like ' W', ' %', ' MiB'
-    numeric = re.sub(r"[^\d.\-]", "", value.split()[0] if value.split() else value)
+    # Remove units like ' W', ' %', ' MiB' then keep only a leading numeric token.
+    raw_token = value.split()[0] if value.split() else value
+    numeric = re.sub(r"[^\d.\-]", "", raw_token)
+    if not _FLOAT_RE.match(numeric):
+        return None
     try:
         return float(numeric)
     except ValueError:
@@ -69,9 +75,10 @@ def _parse_free(output: str) -> tuple[float | None, float | None]:
 def _parse_df(output: str) -> float | None:
     lines = output.strip().splitlines()
     if len(lines) >= 2:
-        parts = lines[1].split()
-        if len(parts) >= 5:
-            return _to_float(parts[4].replace("%", ""))
+        for token in lines[1].split():
+            m = re.search(r"(\d+)%", token)
+            if m:
+                return float(m.group(1))
     return None
 
 
@@ -102,17 +109,56 @@ def flatten_metrics(metrics: NodeMetrics) -> list[dict]:
     records = []
     ts = metrics.timestamp.isoformat()
     for gpu in metrics.gpus:
-        records.append({
-            "node": metrics.node, "category": "gpu", "name": "temperature_c",
-            "value": gpu.temperature_c, "unit": "C", "labels": {"index": gpu.index, "name": gpu.name}, "timestamp": ts
-        })
-        records.append({
-            "node": metrics.node, "category": "gpu", "name": "utilization_gpu_pct",
-            "value": gpu.utilization_gpu_pct, "unit": "%", "labels": {"index": gpu.index}, "timestamp": ts
-        })
+        base_labels = {"index": gpu.index, "name": gpu.name}
+        for name, value, unit, labels in (
+            ("temperature_c", gpu.temperature_c, "C", base_labels),
+            ("utilization_gpu_pct", gpu.utilization_gpu_pct, "%", {"index": gpu.index}),
+            ("utilization_memory_pct", gpu.utilization_memory_pct, "%", {"index": gpu.index}),
+            ("memory_used_mb", gpu.memory_used_mb, "MiB", {"index": gpu.index}),
+            ("memory_total_mb", gpu.memory_total_mb, "MiB", {"index": gpu.index}),
+            ("power_draw_w", gpu.power_draw_w, "W", {"index": gpu.index}),
+            ("fan_speed_pct", gpu.fan_speed_pct, "%", {"index": gpu.index}),
+        ):
+            records.append({
+                "node": metrics.node,
+                "category": "gpu",
+                "name": name,
+                "value": value,
+                "unit": unit,
+                "labels": labels,
+                "timestamp": ts,
+            })
     if metrics.system:
-        records.append({
-            "node": metrics.node, "category": "system", "name": "disk_used_pct",
-            "value": metrics.system.disk_used_pct, "unit": "%", "labels": {}, "timestamp": ts
-        })
+        sys = metrics.system
+        for name, value, unit in (
+            ("cpu_usage_pct", sys.cpu_usage_pct, "%"),
+            ("memory_used_mb", sys.memory_used_mb, "MiB"),
+            ("memory_total_mb", sys.memory_total_mb, "MiB"),
+            ("disk_used_pct", sys.disk_used_pct, "%"),
+            ("load_average_1m", sys.load_average_1m, ""),
+            ("uptime_seconds", sys.uptime_seconds, "s"),
+        ):
+            records.append({
+                "node": metrics.node,
+                "category": "system",
+                "name": name,
+                "value": value,
+                "unit": unit,
+                "labels": {},
+                "timestamp": ts,
+            })
+    for net in metrics.networks:
+        for name, value, unit in (
+            ("packet_loss_pct", net.packet_loss_pct, "%"),
+            ("avg_latency_ms", net.avg_latency_ms, "ms"),
+        ):
+            records.append({
+                "node": metrics.node,
+                "category": "network",
+                "name": name,
+                "value": value,
+                "unit": unit,
+                "labels": {"target": net.target},
+                "timestamp": ts,
+            })
     return records

@@ -1,10 +1,6 @@
-import asyncio
-from datetime import datetime, timezone
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 from inspector.collector import Collector
 from inspector.config import NodeConfig
-from inspector.models import NodeMetrics
 
 
 async def test_build_commands():

@@ -54,7 +54,7 @@ python -m main
 python -m main
 ```
 
-日志默认输出到 `logs/inspector.log`，由 `scripts/run.sh` 或 systemd 服务自动创建目录。
+日志默认输出到 stdout，`scripts/run.sh` 或 systemd 服务通过 `StandardOutput=append:` 将其重定向到 `/var/log/gpu-node-inspector/inspector.log`，并自动创建目录。
 
 ## 部署到金山云服务器
 

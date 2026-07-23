@@ -1,9 +1,8 @@
-import os
 import yaml
 from inspector.config import Settings, load_config
 
 
-def test_load_config_reads_file(tmp_path):
+def test_load_config_reads_file(tmp_path, monkeypatch):
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(yaml.safe_dump({
         "app": {"name": "test", "log_level": "DEBUG"},
@@ -15,7 +14,7 @@ def test_load_config_reads_file(tmp_path):
         "notifications": {"type": "generic", "webhook_url_env": "W", "max_retries": 5},
         "dashboard": {"enabled": True, "host": "127.0.0.1", "port": 8080},
     }))
-    os.environ["SSH_PRIVATE_KEY_PATH"] = str(tmp_path / "key.pem")
+    monkeypatch.setenv("SSH_PRIVATE_KEY_PATH", str(tmp_path / "key.pem"))
     key_path = tmp_path / "key.pem"
     key_path.write_text("fake-key")
     key_path.chmod(0o600)

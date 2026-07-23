@@ -1,12 +1,15 @@
 from __future__ import annotations
 import asyncio
-import asyncssh
+import logging
 from datetime import datetime, timezone
-from pathlib import Path
+import asyncssh
 from inspector.config import NodeConfig, Settings
 from inspector.metrics import parse_nvidia_smi, parse_ping, parse_system
-from inspector.models import NetworkMetric, NodeMetrics, SystemMetric
+from inspector.models import NodeMetrics
 from inspector.store import SqliteStore
+
+
+logger = logging.getLogger(__name__)
 
 
 class Collector:
@@ -42,13 +45,27 @@ class Collector:
                 connect_timeout=self.cfg.ssh.connect_timeout,
             ) as conn:
                 cmds = self._build_commands(node)
-                gpu_out = await self._run(conn, cmds["gpu"])
-                df_out = await self._run(conn, cmds["df"])
-                mem_out = await self._run(conn, cmds["memory"])
-                load_out = await self._run(conn, cmds["load"])
-                uptime_out = await self._run(conn, cmds["uptime"])
-                cpu_out = await self._run(conn, cmds["cpu"])
-                ping_out = await self._run(conn, cmds["ping"])
+                gpu_res = await self._run(conn, cmds["gpu"])
+                df_res = await self._run(conn, cmds["df"])
+                mem_res = await self._run(conn, cmds["memory"])
+                load_res = await self._run(conn, cmds["load"])
+                uptime_res = await self._run(conn, cmds["uptime"])
+                cpu_res = await self._run(conn, cmds["cpu"])
+                ping_res = await self._run(conn, cmds["ping"])
+
+                gpu_out = gpu_res.stdout
+                df_out = df_res.stdout
+                mem_out = mem_res.stdout
+                load_out = load_res.stdout
+                uptime_out = uptime_res.stdout
+                cpu_out = cpu_res.stdout
+                ping_out = ping_res.stdout
+
+                error_messages = []
+                for label, res in (("gpu", gpu_res), ("df", df_res), ("memory", mem_res),
+                                   ("load", load_res), ("uptime", uptime_res), ("cpu", cpu_res)):
+                    if res.exit_status != 0:
+                        error_messages.append(f"{label} command failed (exit={res.exit_status}): {res.stderr.strip()}")
 
                 gpus = parse_nvidia_smi(gpu_out)
                 system = parse_system({
@@ -67,19 +84,27 @@ class Collector:
                     gpus=gpus,
                     system=system,
                     networks=[network],
+                    error="; ".join(error_messages) if error_messages else None,
                     raw={
-                        "gpu": gpu_out, "df": df_out, "memory": mem_out,
-                        "load": load_out, "uptime": uptime_out, "cpu": cpu_out,
-                        "ping": ping_out,
+                        "gpu": gpu_out, "gpu_stderr": gpu_res.stderr or "",
+                        "df": df_out, "df_stderr": df_res.stderr or "",
+                        "memory": mem_out, "memory_stderr": mem_res.stderr or "",
+                        "load": load_out, "load_stderr": load_res.stderr or "",
+                        "uptime": uptime_out, "uptime_stderr": uptime_res.stderr or "",
+                        "cpu": cpu_out, "cpu_stderr": cpu_res.stderr or "",
+                        "ping": ping_out, "ping_stderr": ping_res.stderr or "",
                     }
                 )
                 return metrics
         except Exception as e:
             return NodeMetrics(node=node.name, timestamp=timestamp, reachable=False, error=str(e))
 
-    async def _run(self, conn: asyncssh.SSHClientConnection, args: list[str]) -> str:
+    async def _run(self, conn: asyncssh.SSHClientConnection, args: list[str]) -> asyncssh.SSHCompletedProcess:
         result = await conn.run(args[0], args=args[1:], timeout=self.cfg.ssh.command_timeout)
-        return result.stdout
+        if result.exit_status != 0:
+            logger.warning("SSH command failed: args=%s exit_status=%s stderr=%s",
+                           args, result.exit_status, result.stderr)
+        return result
 
     async def collect_all(self) -> list[NodeMetrics]:
         return await asyncio.gather(*[self.collect_node(n) for n in self.cfg.nodes])

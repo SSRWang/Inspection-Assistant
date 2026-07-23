@@ -1,6 +1,4 @@
-from datetime import datetime, timezone
-from inspector.metrics import parse_nvidia_smi, parse_ping, flatten_metrics
-from inspector.models import GpuMetric, NodeMetrics, SystemMetric
+from inspector.metrics import parse_nvidia_smi, parse_ping
 
 
 def test_parse_nvidia_smi_basic():

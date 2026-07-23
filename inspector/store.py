@@ -5,7 +5,7 @@ import sqlite3
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any
-from inspector.models import AlertEvent, NodeMetrics
+from inspector.models import NodeMetrics
 
 
 class SqliteStore:

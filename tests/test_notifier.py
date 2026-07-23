@@ -1,6 +1,4 @@
-import pytest
-from unittest.mock import AsyncMock
-from inspector.notifier import GenericWebhookNotifier, create_notifier
+from inspector.notifier import GenericWebhookNotifier
 from inspector.config import NotificationsConfig
 
 

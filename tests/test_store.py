@@ -1,8 +1,6 @@
-import asyncio
 from datetime import datetime, timezone
-from pathlib import Path
 import pytest
-from inspector.models import GpuMetric, NodeMetrics, SystemMetric, AlertEvent
+from inspector.models import GpuMetric, NodeMetrics, SystemMetric
 from inspector.store import SqliteStore
 
 
