@@ -10,6 +10,6 @@ fi
 
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r requirements.txt
+pip install -r requirements.txt
 cp -n config.example.yaml config.yaml || true
 echo "Edit config.yaml and run: python -m main"
