@@ -198,3 +198,19 @@ class SqliteStore:
             cutoff = (datetime.now(timezone.utc) - timedelta(days=retain_days)).isoformat()
             self._connection.execute("DELETE FROM metrics WHERE timestamp < ?", (cutoff,))
             self._connection.commit()
+
+    async def list_metrics(self, node: str | None = None, rule: str | None = None,
+                           limit: int = 100) -> list[dict[str, Any]]:
+        async with self._lock:
+            query = "SELECT * FROM metrics WHERE 1=1"
+            params: list[Any] = []
+            if node:
+                query += " AND node = ?"
+                params.append(node)
+            if rule:
+                query += " AND name = ?"
+                params.append(rule)
+            query += " ORDER BY timestamp DESC LIMIT ?"
+            params.append(limit)
+            rows = self._connection.execute(query, params).fetchall()
+            return [dict(r) for r in rows]
