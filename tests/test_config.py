@@ -1,6 +1,4 @@
 import os
-from pathlib import Path
-import pytest
 import yaml
 from inspector.config import Settings, load_config
 
