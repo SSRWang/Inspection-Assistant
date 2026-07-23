@@ -1,0 +1,45 @@
+app:
+  name: "gpu-node-inspector"
+  log_level: INFO
+
+schedule:
+  interval_minutes: 5
+
+storage:
+  path: "data/inspector.db"
+  retain_days: 7
+
+ssh:
+  private_key_path_env: "SSH_PRIVATE_KEY_PATH"
+  connect_timeout: 10
+  command_timeout: 30
+
+nodes:
+  - name: node-01
+    host: 192.168.1.10
+    user: ubuntu
+    ssh_private_key_path_env: "SSH_PRIVATE_KEY_PATH_NODE_01"
+    gpu_vendor: nvidia
+    ping_targets:
+      - "8.8.8.8"
+
+alert_rules:
+  gpu_temp_c: 85
+  gpu_memory_pct: 90
+  disk_usage_pct: 85
+  node_unreachable: true
+  stability_cycles: 2
+
+notifications:
+  type: generic
+  webhook_url_env: "WPS_WEBHOOK_URL"
+  format: markdown_card
+  include_gpu_processes: true
+  max_retries: 5
+  retry_interval_seconds: 60
+
+dashboard:
+  enabled: true
+  host: "127.0.0.1"
+  port: 8080
+  token_env: "DASHBOARD_TOKEN"
