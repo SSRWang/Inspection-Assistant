@@ -21,11 +21,29 @@ _store: SqliteStore | None = None
 
 
 def setup_logging(level: str):
+    level_name = level.upper()
+    if not hasattr(logging, level_name) or not isinstance(getattr(logging, level_name), int):
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            handlers=[logging.StreamHandler(sys.stdout)],
+        )
+        _logger.warning("Invalid log level %r; defaulting to INFO", level)
+        return
     logging.basicConfig(
-        level=getattr(logging, level.upper()),
+        level=getattr(logging, level_name),
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         handlers=[logging.StreamHandler(sys.stdout)],
     )
+
+
+def _validate_ssh_keys(settings: Settings):
+    for node in settings.nodes:
+        try:
+            settings.ssh.resolve_private_key_path(node.ssh_private_key_path_env)
+        except Exception as exc:
+            _logger.error("SSH key validation failed for node %r: %s", node.name, exc)
+            sys.exit(1)
 
 
 async def main():
@@ -33,6 +51,8 @@ async def main():
     settings = load_config(_config_path)
     _settings_holder = SettingsHolder(settings)
     setup_logging(settings.app.log_level)
+
+    _validate_ssh_keys(settings)
 
     _store = SqliteStore(settings.storage.path)
     await _store.setup()
@@ -62,7 +82,26 @@ async def main():
             loop.add_signal_handler(sig, lambda: asyncio.create_task(reload_config()))
 
     _logger.info("Service started")
-    await server.serve()
+    server_task = asyncio.create_task(server.serve())
+    try:
+        await server_task
+    finally:
+        _logger.info("Shutting down service")
+        try:
+            scheduler.shutdown()
+        except Exception:
+            _logger.exception("Error shutting down scheduler")
+        if _store is not None:
+            try:
+                await _store.close()
+            except Exception:
+                _logger.exception("Error closing store")
+        if not server_task.done():
+            server_task.cancel()
+            try:
+                await server_task
+            except asyncio.CancelledError:
+                pass
 
 
 async def reload_config():
@@ -79,4 +118,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        pass
+        _logger.info("Shutdown requested by user")
