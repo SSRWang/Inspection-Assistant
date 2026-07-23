@@ -57,8 +57,9 @@ async def main():
     server = uvicorn.Server(config)
 
     loop = asyncio.get_running_loop()
-    for sig in (signal.SIGHUP,):
-        loop.add_signal_handler(sig, lambda: asyncio.create_task(reload_config()))
+    if sys.platform != "win32":
+        for sig in (signal.SIGHUP,):
+            loop.add_signal_handler(sig, lambda: asyncio.create_task(reload_config()))
 
     _logger.info("Service started")
     await server.serve()

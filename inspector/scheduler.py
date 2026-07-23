@@ -25,10 +25,9 @@ async def run_inspection_cycle(collector: Collector, alerter: Alerter, notifier:
     if _is_collecting:
         logger.warning("Previous inspection cycle is still running; skipping this round")
         return
-
-    cfg = cfg_holder.settings
     _is_collecting = True
     try:
+        cfg = cfg_holder.settings
         await _retry_pending_webhooks(store, notifier, cfg)
         metrics_list = await collector.collect_all()
         for metrics in metrics_list:
