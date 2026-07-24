@@ -1,6 +1,7 @@
 from __future__ import annotations
 import asyncio
 import logging
+import shlex
 from datetime import datetime, timezone
 import asyncssh
 from inspector.config import NodeConfig, Settings
@@ -101,10 +102,14 @@ class Collector:
             return NodeMetrics(node=node.name, timestamp=timestamp, reachable=False, error=str(e))
 
     async def _run(self, conn: asyncssh.SSHClientConnection, args: list[str]) -> asyncssh.SSHCompletedProcess:
-        result = await conn.run(args[0], args=args[1:], timeout=self.cfg.ssh.command_timeout)
+        # asyncssh.run() takes a single command string, not an args list.
+        # Rejoin the args using shlex.quote so each token is shell-escaped,
+        # preserving the no-injection guarantee of the original args-list form.
+        command = " ".join(shlex.quote(arg) for arg in args)
+        result = await conn.run(command, timeout=self.cfg.ssh.command_timeout)
         if result.exit_status != 0:
-            logger.warning("SSH command failed: args=%s exit_status=%s stderr=%s",
-                           args, result.exit_status, result.stderr)
+            logger.warning("SSH command failed: %s exit_status=%s stderr=%s",
+                           command, result.exit_status, result.stderr)
         return result
 
     async def collect_all(self) -> list[NodeMetrics]:
