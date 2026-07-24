@@ -57,6 +57,11 @@ if [ ! -f "$CONFIG_DIR/env" ]; then
     chown "$USER:$USER" "$CONFIG_DIR/env"
     echo "Please edit $CONFIG_DIR/env with secrets"
 fi
+
+# Ensure the config path is exported to the service so main.py finds /etc/.../config.yaml
+if ! grep -q "^INSPECTOR_CONFIG_PATH=" "$CONFIG_DIR/env"; then
+    echo "INSPECTOR_CONFIG_PATH=$CONFIG_DIR/config.yaml" >> "$CONFIG_DIR/env"
+fi
 chmod 600 "$CONFIG_DIR/config.yaml"
 chown "$USER:$USER" "$CONFIG_DIR/config.yaml"
 

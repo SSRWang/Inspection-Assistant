@@ -1,6 +1,7 @@
 from __future__ import annotations
 import asyncio
 import logging
+import os
 import signal
 import sys
 from pathlib import Path
@@ -15,7 +16,7 @@ from inspector.scheduler import SettingsHolder, run_inspection_cycle
 from inspector.store import SqliteStore
 
 _logger = logging.getLogger(__name__)
-_config_path = Path("config.yaml")
+_config_path = Path(os.environ.get("INSPECTOR_CONFIG_PATH", "config.yaml"))
 _settings_holder: SettingsHolder | None = None
 _store: SqliteStore | None = None
 
