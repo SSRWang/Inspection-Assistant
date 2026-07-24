@@ -66,8 +66,19 @@ chown "$USER:$USER" "$LOG_DIR"
 
 # Virtualenv
 python3 -m venv "$INSTALL_DIR/venv"
-"$INSTALL_DIR/venv/bin/pip" install --upgrade pip
-"$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt"
+PIP_INDEX_URL="https://mirrors.aliyun.com/pypi/simple"
+PIP_TRUSTED_HOST="mirrors.aliyun.com"
+"$INSTALL_DIR/venv/bin/pip" install --upgrade pip -i "$PIP_INDEX_URL" --trusted-host "$PIP_TRUSTED_HOST"
+"$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt" -i "$PIP_INDEX_URL" --trusted-host "$PIP_TRUSTED_HOST"
+
+# Persist the Aliyun PyPI mirror for the service user so runtime pip/caches also use it
+mkdir -p /home/"$USER"/.config/pip
+cat > /home/"$USER"/.config/pip/pip.conf <<EOF
+[global]
+index-url = $PIP_INDEX_URL
+trusted-host = $PIP_TRUSTED_HOST
+EOF
+chown -R "$USER:$USER" /home/"$USER"/.config
 
 # Systemd service
 cat > /etc/systemd/system/gpu-node-inspector.service <<EOF
