@@ -97,6 +97,7 @@ class Collector:
                 )
                 return metrics
         except Exception as e:
+            logger.exception("Failed to collect metrics from node %s: %s", node.name, e)
             return NodeMetrics(node=node.name, timestamp=timestamp, reachable=False, error=str(e))
 
     async def _run(self, conn: asyncssh.SSHClientConnection, args: list[str]) -> asyncssh.SSHCompletedProcess:
