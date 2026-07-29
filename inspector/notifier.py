@@ -77,16 +77,111 @@ class WPSNotifier(BaseNotifier):
         lines = [
             "# 🔍 GPU 节点巡检报告",
             "",
-            f"> **节点总数**: {node_count}　**在线**: {online_count}",
+            f"**节点总数**: {node_count}　**在线**: {online_count}",
             "",
         ]
 
         for n in nodes:
             status_icon = "🟢" if n.get("reachable") else "🔴"
             status_text = "在线" if n.get("reachable") else "离线"
-            lines.append(f"### {status_icon} {n.get('name', 'unknown')} — {status_text}")
-            lines.append(f"> {n.get('summary', '-')}")
-            lines.append(f"> 最后检查: {n.get('last_check_at', '-')}")
+            lines.append(f"## {status_icon} {n.get('name', 'unknown')} — {status_text}")
+
+            # 解析 raw_metrics 获取主机信息
+            raw = n.get("raw_metrics", "{}")
+            if isinstance(raw, str):
+                try:
+                    raw = json.loads(raw)
+                except (ValueError, TypeError):
+                    raw = {}
+
+            if raw:
+                # 主机信息
+                hostname = raw.get("hostname", "-")
+                ip_addr = raw.get("ip_addr", "-").split()[0] if raw.get("ip_addr") else "-"
+                os_release = raw.get("os_release", "")
+                os_name = ""
+                for line in os_release.split("\n"):
+                    if line.startswith("PRETTY_NAME="):
+                        os_name = line.split("=", 1)[1].strip('"')
+                        break
+                uname = raw.get("uname", "").split()
+                kernel = uname[2] if len(uname) > 2 else "-"
+
+                lines.append(f"> **主机**: {hostname} ({ip_addr})")
+                lines.append(f"> **系统**: {os_name or '-'} | **内核**: {kernel}")
+                lines.append("")
+
+                # GPU 信息
+                gpu_out = raw.get("gpu", "").strip()
+                if gpu_out:
+                    lines.append("**🎮 GPU**")
+                    for line in gpu_out.split("\n"):
+                        parts = [p.strip() for p in line.split(",")]
+                        if len(parts) >= 8:
+                            lines.append(f"- GPU {parts[0]}: {parts[1]}")
+                            lines.append(f"  温度: {parts[2]}°C | 利用率: {parts[3]}% | 显存: {parts[5]}/{parts[6]} MB")
+                            lines.append(f"  功耗: {parts[7]}W | 风扇: {parts[8]}%")
+                elif raw.get("gpu_stderr", "").strip():
+                    lines.append("**🎮 GPU**")
+                    lines.append(f"- {raw['gpu_stderr'].strip()}")
+
+                # 系统指标
+                lines.append("")
+                lines.append("**💻 系统指标**")
+
+                # 磁盘
+                df_out = raw.get("df", "").strip()
+                if df_out:
+                    for line in df_out.split("\n"):
+                        parts = line.split()
+                        if len(parts) >= 5 and "%" in parts[4]:
+                            lines.append(f"- 磁盘: {parts[4]} 已用 | 总量: {parts[1]} | 可用: {parts[3]}")
+
+                # 内存
+                mem_out = raw.get("memory", "").strip()
+                if mem_out:
+                    for line in mem_out.split("\n"):
+                        if line.startswith("Mem:"):
+                            parts = line.split()
+                            if len(parts) >= 4:
+                                lines.append(f"- 内存: {parts[2]} MB 已用 / {parts[1]} MB 总量 | 可用: {parts[6]} MB")
+
+                # 负载
+                load_out = raw.get("load", "").strip()
+                if load_out:
+                    parts = load_out.split()
+                    if len(parts) >= 3:
+                        lines.append(f"- 负载: 1分钟 {parts[0]} | 5分钟 {parts[1]} | 15分钟 {parts[2]}")
+
+                # CPU
+                cpu_out = raw.get("cpu", "").strip()
+                if cpu_out:
+                    cpu_info = self._parse_cpu_info(cpu_out)
+                    if cpu_info:
+                        lines.append(f"- CPU: {cpu_info}")
+
+                # 运行时长
+                uptime_out = raw.get("uptime", "").strip()
+                if uptime_out:
+                    try:
+                        uptime_secs = float(uptime_out.split()[0])
+                        days = int(uptime_secs // 86400)
+                        hours = int((uptime_secs % 86400) // 3600)
+                        lines.append(f"- 运行时长: {days}天 {hours}小时")
+                    except (ValueError, IndexError):
+                        pass
+
+                # 网络 Ping
+                ping_out = raw.get("ping", "").strip()
+                if ping_out:
+                    lines.append("")
+                    lines.append("**🌐 网络 Ping**")
+                    for line in ping_out.split("\n"):
+                        if "packet loss" in line:
+                            lines.append(f"- {line.strip()}")
+                        elif "rtt" in line or "min/avg/max" in line:
+                            lines.append(f"- {line.strip()}")
+
             lines.append("")
 
         return {"msgtype": "markdown", "markdown": {"text": "\n".join(lines)}}

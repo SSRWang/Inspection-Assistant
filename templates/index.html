@@ -35,8 +35,40 @@
 
     <!-- Summary -->
     <div class="card">
-        <p style="margin:0; font-size:1.05rem;">节点总数: <strong>{{ node_count }}</strong> &nbsp;|&nbsp; 在线: <strong style="color:#22c55e;">{{ online_count }}</strong></p>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <p style="margin:0; font-size:1.05rem;">节点总数: <strong>{{ node_count }}</strong> &nbsp;|&nbsp; 在线: <strong style="color:#22c55e;">{{ online_count }}</strong></p>
+            <button onclick="sendReport()" id="reportBtn" style="padding:0.5rem 1.2rem; background:#3b82f6; color:white; border:none; border-radius:6px; cursor:pointer; font-size:0.9rem; font-weight:500;">📤 手动汇报到群</button>
+        </div>
     </div>
+
+    <script>
+    async function sendReport() {
+        const btn = document.getElementById('reportBtn');
+        btn.disabled = true;
+        btn.textContent = '发送中...';
+        btn.style.background = '#94a3b8';
+        try {
+            const token = new URLSearchParams(window.location.search).get('token') || '';
+            const resp = await fetch('/api/report?token=' + token, { method: 'POST' });
+            const data = await resp.json();
+            if (resp.ok) {
+                btn.textContent = '✅ 已发送';
+                btn.style.background = '#22c55e';
+            } else {
+                btn.textContent = '❌ ' + (data.detail || '发送失败');
+                btn.style.background = '#ef4444';
+            }
+        } catch (e) {
+            btn.textContent = '❌ 网络错误';
+            btn.style.background = '#ef4444';
+        }
+        setTimeout(() => {
+            btn.disabled = false;
+            btn.textContent = '📤 手动汇报到群';
+            btn.style.background = '#3b82f6';
+        }, 3000);
+    }
+    </script>
 
     {% for s in statuses %}
     <div class="card">
@@ -52,6 +84,47 @@
         {% endif %}
 
         {% if s.reachable and s.raw %}
+
+        <!-- 主机信息 -->
+        <div class="metric-item" style="margin-top:0.75rem; background: linear-gradient(135deg, #3b82f611, #6366f111); border: 1px solid #3b82f633;">
+            <h3 style="margin:0 0 0.5rem 0; color:#3b82f6;">🖥️ 主机信息</h3>
+            <div class="metric-grid">
+                <div class="metric-item">
+                    <div class="metric-label">主机名</div>
+                    <div class="metric-value">{{ s.raw.get('hostname', '-') }}</div>
+                    {% if s.raw.get('hostname_fqdn', '') and s.raw.get('hostname_fqdn') != s.raw.get('hostname', '') %}
+                    <div class="summary">{{ s.raw.get('hostname_fqdn') }}</div>
+                    {% endif %}
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">IP 地址</div>
+                    <div class="metric-value">{{ s.raw.get('ip_addr', '-').split()[0] if s.raw.get('ip_addr') else '-' }}</div>
+                    {% if s.raw.get('ip_addr', '').split()|length > 1 %}
+                    <div class="summary">{{ s.raw.get('ip_addr') }}</div>
+                    {% endif %}
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">操作系统</div>
+                    {% set os_lines = s.raw.get('os_release', '').split('\n') %}
+                    {% set ns = namespace(os_name='') %}
+                    {% for os_line in os_lines %}
+                        {% if os_line.startswith('PRETTY_NAME=') %}
+                            {% set ns.os_name = os_line.split('=', 1)[1].strip('"') %}
+                        {% endif %}
+                    {% endfor %}
+                    <div class="metric-value">{{ ns.os_name or '-' }}</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">内核版本</div>
+                    {% set uname_parts = s.raw.get('uname', '').split() %}
+                    <div class="metric-value">{{ uname_parts[2] if uname_parts|length > 2 else '-' }}</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">Machine ID</div>
+                    <div class="metric-value" style="font-size:0.85rem; word-break:break-all;">{{ s.raw.get('machine_id', '-')[:16] }}{% if s.raw.get('machine_id', '')|length > 16 %}...{% endif %}</div>
+                </div>
+            </div>
+        </div>
 
         <!-- GPU Section -->
         {% if s.raw.get('gpu') and s.raw.get('gpu').strip() %}

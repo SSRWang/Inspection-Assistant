@@ -21,6 +21,12 @@ class Collector:
     def _build_commands(self, node: NodeConfig) -> dict[str, list[str]]:
         ping_target = node.ping_targets[0] if node.ping_targets else "8.8.8.8"
         return {
+            "hostname": ["hostname"],
+            "hostname_fqdn": ["hostname", "-f"],
+            "ip_addr": ["hostname", "-I"],
+            "os_release": ["cat", "/etc/os-release"],
+            "uname": ["uname", "-a"],
+            "machine_id": ["cat", "/etc/machine-id"],
             "gpu": ["nvidia-smi", "--query-gpu=index,name,temperature.gpu,utilization.gpu,utilization.memory,memory.used,memory.total,power.draw,fan.speed", "--format=csv,noheader"],
             "df": ["df", "-h", "/"],
             "memory": ["free", "-m"],
@@ -46,6 +52,16 @@ class Collector:
                 connect_timeout=self.cfg.ssh.connect_timeout,
             ) as conn:
                 cmds = self._build_commands(node)
+
+                # 采集主机信息
+                hostname_res = await self._run(conn, cmds["hostname"])
+                hostname_fqdn_res = await self._run(conn, cmds["hostname_fqdn"])
+                ip_addr_res = await self._run(conn, cmds["ip_addr"])
+                os_release_res = await self._run(conn, cmds["os_release"])
+                uname_res = await self._run(conn, cmds["uname"])
+                machine_id_res = await self._run(conn, cmds["machine_id"])
+
+                # 采集指标
                 gpu_res = await self._run(conn, cmds["gpu"])
                 df_res = await self._run(conn, cmds["df"])
                 mem_res = await self._run(conn, cmds["memory"])
@@ -87,12 +103,22 @@ class Collector:
                     networks=[network],
                     error="; ".join(error_messages) if error_messages else None,
                     raw={
+                        # 主机信息
+                        "hostname": hostname_res.stdout.strip(),
+                        "hostname_fqdn": hostname_fqdn_res.stdout.strip(),
+                        "ip_addr": ip_addr_res.stdout.strip(),
+                        "os_release": os_release_res.stdout.strip(),
+                        "uname": uname_res.stdout.strip(),
+                        "machine_id": machine_id_res.stdout.strip(),
+                        # GPU 指标
                         "gpu": gpu_out, "gpu_stderr": gpu_res.stderr or "",
+                        # 系统指标
                         "df": df_out, "df_stderr": df_res.stderr or "",
                         "memory": mem_out, "memory_stderr": mem_res.stderr or "",
                         "load": load_out, "load_stderr": load_res.stderr or "",
                         "uptime": uptime_out, "uptime_stderr": uptime_res.stderr or "",
                         "cpu": cpu_out, "cpu_stderr": cpu_res.stderr or "",
+                        # 网络
                         "ping": ping_out, "ping_stderr": ping_res.stderr or "",
                     }
                 )
