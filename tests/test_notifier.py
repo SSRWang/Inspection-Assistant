@@ -32,9 +32,9 @@ async def test_wps_periodic_report(httpx_mock):
     import json
     body = json.loads(request.content)
     assert body["msgtype"] == "markdown"
-    assert "GPU 节点巡检报告" in body["markdown"]["content"]
-    assert "🟢" in body["markdown"]["content"]
-    assert "🔴" in body["markdown"]["content"]
+    assert "GPU 节点巡检报告" in body["markdown"]["text"]
+    assert "🟢" in body["markdown"]["text"]
+    assert "🔴" in body["markdown"]["text"]
 
 
 async def test_wps_alert_triggered(httpx_mock):
@@ -56,8 +56,8 @@ async def test_wps_alert_triggered(httpx_mock):
     import json
     body = json.loads(request.content)
     assert body["msgtype"] == "markdown"
-    assert "告警触发" in body["markdown"]["content"]
-    assert "89" in body["markdown"]["content"]
+    assert "告警触发" in body["markdown"]["text"]
+    assert "89" in body["markdown"]["text"]
 
 
 async def test_wps_alert_recovered(httpx_mock):
@@ -79,4 +79,4 @@ async def test_wps_alert_recovered(httpx_mock):
     import json
     body = json.loads(request.content)
     assert body["msgtype"] == "markdown"
-    assert "告警恢复" in body["markdown"]["content"]
+    assert "告警恢复" in body["markdown"]["text"]

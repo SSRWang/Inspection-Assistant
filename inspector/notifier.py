@@ -89,7 +89,7 @@ class WPSNotifier(BaseNotifier):
             lines.append(f"> 最后检查: {n.get('last_check_at', '-')}")
             lines.append("")
 
-        return {"msgtype": "markdown", "markdown": {"content": "\n".join(lines)}}
+        return {"msgtype": "markdown", "markdown": {"text": "\n".join(lines)}}
 
     def _format_alert(self, payload: dict) -> dict:
         alert_type = payload.get("type", "")
@@ -121,7 +121,7 @@ class WPSNotifier(BaseNotifier):
             f"<font color='{color}'>{message}</font>",
         ]
 
-        return {"msgtype": "markdown", "markdown": {"content": "\n".join(lines)}}
+        return {"msgtype": "markdown", "markdown": {"text": "\n".join(lines)}}
 
     def _format_text(self, content: str) -> dict:
         return {
