@@ -163,7 +163,7 @@
 
         {% endif %}
 
-        <p class="timestamp">最后检查: {{ s.last_check_at }}</p>
+        <p class="timestamp">最后检查: <span class="utc-time" data-utc="{{ s.last_check_at }}">{{ s.last_check_at }}</span></p>
     </div>
     {% endfor %}
 
@@ -181,12 +181,30 @@
                     <td>{{ a.rule }}</td>
                     <td><span class="badge {{ 'badge-red' if a.state == 'triggered' else 'badge-green' }}">{{ a.state }}</span></td>
                     <td>{{ a.last_value if a.last_value is not none else '-' }}</td>
-                    <td>{{ a.updated_at }}</td>
+                    <td><span class="utc-time" data-utc="{{ a.updated_at }}">{{ a.updated_at }}</span></td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
     {% endif %}
+
+    <script>
+    // Convert UTC timestamps to local time (Beijing time for China-based servers)
+    document.querySelectorAll('.utc-time').forEach(function(el) {
+        var utc = el.getAttribute('data-utc');
+        if (utc) {
+            try {
+                var d = new Date(utc);
+                var local = d.toLocaleString('zh-CN', {
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    hour12: false
+                });
+                el.textContent = local;
+            } catch(e) {}
+        }
+    });
+    </script>
 </body>
 </html>
