@@ -25,3 +25,11 @@ def test_dashboard_requires_token(app):
 
     resp = client.get("/", headers={"X-Inspect-Token": "secret"})
     assert resp.status_code == 200
+
+    # Also accept token via ?token= query parameter (browser-friendly)
+    resp = client.get("/?token=secret")
+    assert resp.status_code == 200
+
+    # Wrong token in query param should still fail
+    resp = client.get("/?token=wrong")
+    assert resp.status_code == 401

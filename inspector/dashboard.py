@@ -16,10 +16,16 @@ def create_app(cfg: Settings, store: SqliteStore) -> FastAPI:
 
     expected_token = cfg.dashboard.resolve_token()
 
-    async def verify_token(token: Annotated[str | None, Depends(API_KEY_HEADER)]):
+    async def verify_token(
+        token: Annotated[str | None, Depends(API_KEY_HEADER)],
+        request: Request,
+    ):
         if not expected_token:
             return True
-        if token != expected_token:
+        # Accept token from either header or ?token= query parameter (for browser access)
+        query_token = request.query_params.get("token")
+        effective_token = token or query_token
+        if effective_token != expected_token:
             raise HTTPException(status_code=401, detail="Invalid or missing token")
         return True
 
