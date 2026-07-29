@@ -3,41 +3,183 @@
 <head>
     <title>GPU Node Inspector</title>
     <style>
-        body { font-family: sans-serif; margin: 2rem; background: #f5f5f5; }
-        .card { background: white; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .online { color: green; }
-        .offline { color: red; }
-        .summary { font-size: 0.9rem; color: #555; }
-        table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; }
-        th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid #eee; }
-        th { color: #777; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 2rem; background: #f0f2f5; color: #333; }
+        h1 { margin-bottom: 1.5rem; color: #1a1a1a; }
+        .card { background: white; border-radius: 10px; padding: 1.25rem 1.5rem; margin-bottom: 1rem; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+        .card h2 { margin: 0 0 0.75rem 0; font-size: 1.1rem; color: #444; }
+        .card h3 { margin: 0 0 0.5rem 0; font-size: 1rem; }
+        .online { color: #22c55e; font-weight: 600; }
+        .offline { color: #ef4444; font-weight: 600; }
+        .summary { font-size: 0.9rem; color: #666; margin: 0.25rem 0; }
+        table { width: 100%; border-collapse: collapse; margin-top: 0.5rem; font-size: 0.88rem; }
+        th, td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid #f0f0f0; }
+        th { color: #888; font-weight: 500; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; }
+        .metric-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.75rem; margin-top: 0.75rem; }
+        .metric-item { background: #f8f9fa; border-radius: 8px; padding: 0.75rem 1rem; }
+        .metric-label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.2rem; }
+        .metric-value { font-size: 1.15rem; font-weight: 600; color: #1a1a1a; }
+        .gpu-card { background: linear-gradient(135deg, #667eea11, #764ba211); border: 1px solid #667eea33; }
+        .system-card { background: linear-gradient(135deg, #22c55e11, #16a34a11); border: 1px solid #22c55e33; }
+        .network-card { background: linear-gradient(135deg, #f59e0b11, #d9770611); border: 1px solid #f59e0b33; }
+        .error-card { background: #fef2f2; border: 1px solid #fecaca; }
+        .error-text { color: #dc2626; font-size: 0.85rem; }
+        .timestamp { font-size: 0.8rem; color: #999; margin-top: 0.75rem; }
+        .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+        .badge-green { background: #dcfce7; color: #166534; }
+        .badge-red { background: #fee2e2; color: #991b1b; }
+        .badge-yellow { background: #fef9c3; color: #854d0e; }
     </style>
 </head>
 <body>
-    <h1>GPU Node Inspector</h1>
+    <h1>🔍 GPU Node Inspector</h1>
+
+    <!-- Summary -->
     <div class="card">
-        <p>节点总数: {{ node_count }} | 在线: {{ online_count }}</p>
+        <p style="margin:0; font-size:1.05rem;">节点总数: <strong>{{ node_count }}</strong> &nbsp;|&nbsp; 在线: <strong style="color:#22c55e;">{{ online_count }}</strong></p>
     </div>
+
     {% for s in statuses %}
     <div class="card">
-        <h3>{{ s.node }} <span class="{{ 'online' if s.reachable else 'offline' }}">{{ 'Online' if s.reachable else 'Offline' }}</span></h3>
-        <p class="summary">{{ s.summary }}</p>
-        <p>Last check: {{ s.last_check_at }}</p>
+        <h3>{{ s.node }} &nbsp;<span class="{{ 'online' if s.reachable else 'offline' }}">{{ '● Online' if s.reachable else '● Offline' }}</span></h3>
+
+        {% if not s.reachable %}
+            <div class="error-card metric-item">
+                <p class="error-text" style="margin:0;">⚠️ 节点不可达 — {{ s.summary }}</p>
+                {% if s.raw and s.raw.get('error') %}
+                <p class="error-text" style="margin:0.25rem 0 0 0;">错误: {{ s.raw.get('error') }}</p>
+                {% endif %}
+            </div>
+        {% endif %}
+
+        {% if s.reachable and s.raw %}
+
+        <!-- GPU Section -->
+        {% if s.raw.get('gpu') and s.raw.get('gpu').strip() %}
+        <div class="gpu-card metric-item" style="margin-top:0.75rem;">
+            <h3 style="margin:0 0 0.5rem 0; color:#667eea;">GPU</h3>
+            <table>
+                <thead><tr><th>Index</th><th>Name</th><th>Temp °C</th><th>GPU %</th><th>Mem %</th><th>Mem Used/Total</th><th>Power W</th><th>Fan %</th></tr></thead>
+                <tbody>
+                {% for line in s.raw.get('gpu','').strip().split('\n') if line.strip() %}
+                {% set parts = line.split(',') %}
+                {% if parts|length >= 8 %}
+                <tr>
+                    <td>{{ parts[0].strip() }}</td>
+                    <td>{{ parts[1].strip() }}</td>
+                    <td>{{ parts[2].strip() }}</td>
+                    <td>{{ parts[3].strip() }}</td>
+                    <td>{{ parts[4].strip() }}</td>
+                    <td>{{ parts[5].strip() }} / {{ parts[6].strip() }} MB</td>
+                    <td>{{ parts[7].strip() }}</td>
+                    <td>{{ parts[8].strip() if parts|length > 8 else '-' }}</td>
+                </tr>
+                {% endif %}
+                {% endfor %}
+                </tbody>
+            </table>
+            {% if s.raw.get('gpu_stderr','').strip() %}
+            <p class="summary" style="color:#b45309; margin:0.5rem 0 0 0;">⚠️ {{ s.raw.get('gpu_stderr','').strip() }}</p>
+            {% endif %}
+        </div>
+        {% elif s.raw.get('gpu_stderr','').strip() %}
+        <div class="gpu-card metric-item" style="margin-top:0.75rem;">
+            <h3 style="margin:0 0 0.5rem 0; color:#667eea;">GPU</h3>
+            <p class="summary" style="margin:0; color:#b45309;">⚠️ {{ s.raw.get('gpu_stderr','').strip() }}</p>
+        </div>
+        {% endif %}
+
+        <!-- System Metrics -->
+        <div class="system-card metric-item" style="margin-top:0.75rem;">
+            <h3 style="margin:0 0 0.5rem 0; color:#16a34a;">系统指标</h3>
+            <div class="metric-grid">
+                {% if s.raw.get('df','').strip() %}
+                <div class="metric-item">
+                    <div class="metric-label">磁盘 (/)</div>
+                    {% set df_lines = s.raw.get('df','').strip().split('\n') %}
+                    {% if df_lines|length >= 2 %}
+                    {% set df_parts = df_lines[1].split() %}
+                    <div class="metric-value">{{ df_parts[4] if df_parts|length > 4 else '-' }} used</div>
+                    <div class="summary">{{ df_parts[1] if df_parts|length > 1 else '-' }} total, {{ df_parts[3] if df_parts|length > 3 else '-' }} available</div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {% if s.raw.get('memory','').strip() %}
+                <div class="metric-item">
+                    <div class="metric-label">内存</div>
+                    {% set mem_lines = s.raw.get('memory','').strip().split('\n') %}
+                    {% if mem_lines|length >= 2 %}
+                    {% set mem_parts = mem_lines[1].split() %}
+                    <div class="metric-value">{{ mem_parts[2] if mem_parts|length > 2 else '-' }} MB used / {{ mem_parts[1] if mem_parts|length > 1 else '-' }} MB</div>
+                    <div class="summary">可用: {{ mem_parts[6] if mem_parts|length > 6 else '-' }} MB</div>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {% if s.raw.get('load','').strip() %}
+                <div class="metric-item">
+                    <div class="metric-label">负载 (1/5/15 min)</div>
+                    {% set load_parts = s.raw.get('load','').strip().split() %}
+                    <div class="metric-value">{{ load_parts[0] if load_parts|length > 0 else '-' }} / {{ load_parts[1] if load_parts|length > 1 else '-' }} / {{ load_parts[2] if load_parts|length > 2 else '-' }}</div>
+                </div>
+                {% endif %}
+
+                {% if s.raw.get('uptime','').strip() %}
+                <div class="metric-item">
+                    <div class="metric-label">运行时长</div>
+                    {% set uptime_val = s.raw.get('uptime','').strip().split()[0]|float %}
+                    {% set days = (uptime_val / 86400)|int %}
+                    {% set hours = ((uptime_val % 86400) / 3600)|int %}
+                    <div class="metric-value">{{ days }}天 {{ hours }}小时</div>
+                </div>
+                {% endif %}
+
+                {% if s.raw.get('cpu','').strip() %}
+                <div class="metric-item">
+                    <div class="metric-label">CPU</div>
+                    {% set cpu_output = s.raw.get('cpu','').strip() %}
+                    {% for cpu_line in cpu_output.split('\n') %}
+                    {% if 'Cpu(s)' in cpu_line or '%Cpu' in cpu_line %}
+                    <div class="metric-value">{{ cpu_line.strip() }}</div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Network -->
+        {% if s.raw.get('ping','').strip() %}
+        <div class="network-card metric-item" style="margin-top:0.75rem;">
+            <h3 style="margin:0 0 0.5rem 0; color:#d97706;">网络 Ping</h3>
+            {% set ping_output = s.raw.get('ping','').strip() %}
+            {% for ping_line in ping_output.split('\n') %}
+            {% if 'packet loss' in ping_line or 'rtt' in ping_line or 'min/avg' in ping_line %}
+            <p style="margin:0.15rem 0; font-size:0.88rem;">{{ ping_line.strip() }}</p>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% endif %}
+
+        <p class="timestamp">最后检查: {{ s.last_check_at }}</p>
     </div>
     {% endfor %}
+
     {% if alerts %}
     <div class="card">
-        <h2>Recent Alerts</h2>
+        <h2 style="margin:0 0 0.5rem 0;">🚨 活跃告警</h2>
         <table>
             <thead>
-                <tr><th>Node</th><th>Rule</th><th>State</th><th>Last value</th><th>Updated</th></tr>
+                <tr><th>节点</th><th>规则</th><th>状态</th><th>当前值</th><th>更新时间</th></tr>
             </thead>
             <tbody>
                 {% for a in alerts %}
                 <tr>
                     <td>{{ a.node }}</td>
                     <td>{{ a.rule }}</td>
-                    <td class="{{ 'offline' if a.state == 'triggered' else 'online' }}">{{ a.state }}</td>
+                    <td><span class="badge {{ 'badge-red' if a.state == 'triggered' else 'badge-green' }}">{{ a.state }}</span></td>
                     <td>{{ a.last_value if a.last_value is not none else '-' }}</td>
                     <td>{{ a.updated_at }}</td>
                 </tr>

@@ -1,4 +1,5 @@
 from __future__ import annotations
+import json
 from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -37,12 +38,22 @@ def create_app(cfg: Settings, store: SqliteStore) -> FastAPI:
     async def index(request: Request, _=Depends(verify_token)):
         statuses = await store.list_node_status()
         alerts = await store.list_alert_states()
+        # Parse raw_metrics JSON string into dict for template access
+        parsed_statuses = []
+        for s in statuses:
+            raw = s.get("raw_metrics", "{}")
+            if isinstance(raw, str):
+                try:
+                    raw = json.loads(raw)
+                except (json.JSONDecodeError, TypeError):
+                    raw = {}
+            parsed_statuses.append({**s, "raw": raw})
         return templates.TemplateResponse(request=request, name="index.html", context={
             "request": request,
-            "statuses": statuses,
+            "statuses": parsed_statuses,
             "alerts": alerts,
-            "node_count": len(statuses),
-            "online_count": sum(1 for s in statuses if s["reachable"]),
+            "node_count": len(parsed_statuses),
+            "online_count": sum(1 for s in parsed_statuses if s["reachable"]),
         })
 
     @app.get("/api/status")
