@@ -34,12 +34,15 @@
 |------|------|
 | **GPU 采集** | 温度、GPU 利用率、显存占用/总量、功耗、风扇转速、GPU 进程 |
 | **系统采集** | CPU 使用率、内存使用率、磁盘使用率、负载平均值、运行时长 |
+| **主机信息** | 主机名、IP 地址、操作系统、内核版本、Machine ID |
 | **网络采集** | Ping 延迟、丢包率（支持自定义目标地址） |
 | **阈值告警** | GPU 温度、GPU 显存、磁盘占用、节点不可达；支持防抖（连续 N 个周期超标才触发） |
 | **告警恢复** | 指标恢复正常后自动推送"已恢复"通知 |
 | **Webhook 推送** | 通用 HTTP Webhook 适配器，支持 WPS 协作机器人扩展 |
 | **失败重试** | 推送失败自动入队，指数退避重试，超过次数标记为死信 |
-| **Web 看板** | 浏览器可视化查看节点状态、系统指标、网络 Ping、告警列表 |
+| **Web 看板** | 浏览器可视化查看节点状态、主机信息、系统指标、网络 Ping、告警列表 |
+| **手动汇报** | 看板上一键触发巡检报告推送到 WPS 协作群 |
+| **@触发汇报** | 在 WPS 协作群里 @机器人 即可触发汇报 |
 | **Token 鉴权** | 看板和 API 支持 Token 鉴权（请求头或 URL 参数） |
 | **SQLite 持久化** | 指标历史、节点状态、告警状态、Webhook 重试队列全部持久化 |
 | **指标 TTL** | 自动清理过期指标数据，防止数据库膨胀 |
@@ -68,7 +71,7 @@
 
 ```bash
 # 1. 克隆仓库
-git clone https://gitee.com/wangserran/inspection-assistant.git
+git clone <你的Gitee仓库地址>
 cd inspection-assistant
 
 # 2. 创建虚拟环境并安装依赖
@@ -206,7 +209,7 @@ DASHBOARD_TOKEN=your-secret-token
 
 ```bash
 # 1. 克隆仓库
-git clone https://gitee.com/wangserran/inspection-assistant.git
+git clone <你的Gitee仓库地址>
 cd inspection-assistant
 
 # 2. 运行安装脚本（自动创建用户、目录、虚拟环境、systemd 服务）
@@ -368,20 +371,25 @@ curl -H "X-Inspect-Token: <token>" http://<服务器IP>:8080/
 | 区域 | 内容 |
 |------|------|
 | **节点统计** | 节点总数、在线数 |
+| **主机信息** | 主机名、IP 地址、操作系统、内核版本、Machine ID |
 | **GPU 信息** | 每张卡的温度、利用率、显存、功耗、风扇（无 GPU 时显示警告） |
 | **系统指标** | 磁盘使用率、内存、负载、运行时长、CPU |
-| **网络 Ping** | 延迟、丢包率 |
+| **网络 Ping** | 延迟、丢包率、目标地址 |
 | **活跃告警** | 当前触发的告警列表，带状态标签 |
+| **手动汇报** | 点击按钮可手动触发一次巡检报告推送到 WPS 协作群 |
 
 ### API 接口
 
-| 接口 | 说明 | 鉴权 |
-|------|------|------|
-| `GET /health` | 健康检查 | 不需要 |
-| `GET /` | HTML 看板 | Token |
-| `GET /api/status` | 所有节点状态 JSON | Token |
-| `GET /api/alerts` | 当前活跃告警 JSON | Token |
-| `GET /api/history?node=&rule=&limit=` | 历史指标 JSON | Token |
+| 接口 | 方法 | 说明 | 鉴权 |
+|------|------|------|------|
+| `/health` | GET | 健康检查 | 不需要 |
+| `/` | GET | HTML 看板 | Token |
+| `/api/status` | GET | 所有节点状态 JSON | Token |
+| `/api/alerts` | GET | 当前活跃告警 JSON | Token |
+| `/api/history` | GET | 历史指标 JSON | Token |
+| `/api/report` | POST | 手动触发一次巡检报告推送到群 | Token |
+| `/api/wps/callback` | POST | WPS 机器人回调接口（@触发汇报） | 不需要 |
+| `/api/wps/callback` | GET | WPS 机器人回调 URL 验证 | 不需要 |
 
 ---
 
@@ -430,6 +438,62 @@ curl -H "X-Inspect-Token: <token>" http://<服务器IP>:8080/
 ### 扩展 WPS 协作机器人
 
 修改 `inspector/notifier.py` 中的 `WPSNotifier` 类，按 WPS 的 payload 格式实现 `send()` 方法即可。
+
+---
+
+## WPS 协作机器人 @触发汇报
+
+### 功能说明
+
+- **手动汇报**：在看板页面点击「📤 手动汇报到群」按钮，立即推送一次完整巡检报告到 WPS 协作群
+- **@触发汇报**：在 WPS 协作群里 @机器人 并发送关键词（汇报/状态/巡检/报告/你好），机器人自动回复巡检报告
+- **告警推送**：阈值告警触发/恢复时自动推送到群
+
+### 配置步骤
+
+1. **在 WPS 协作群创建机器人**
+   - 进入群设置 → 群机器人 → 添加机器人 → 自定义机器人
+   - 记录 Webhook URL
+
+2. **配置回调 URL**
+   - 在机器人设置里开启"接收消息"功能
+   - 回调 URL 填写：`http://<你的服务器IP>:8080/api/wps/callback`
+   - 确保安全组放行 8080 端口
+
+3. **配置环境变量**
+   ```bash
+   # 编辑 /etc/gpu-node-inspector/env
+   WPS_WEBHOOK_URL=https://woa.wps.cn/api/v1/webhook/send?key=你的key
+   ```
+
+4. **修改配置类型**
+   ```yaml
+   # 编辑 /etc/gpu-node-inspector/config.yaml
+   notifications:
+     type: wps  # 从 generic 改为 wps
+   ```
+
+5. **重启服务**
+   ```bash
+   sudo systemctl restart gpu-node-inspector
+   ```
+
+### 使用方式
+
+| 场景 | 操作 |
+|------|------|
+| 查看看板 | 浏览器访问 `http://<服务器IP>:8080/?token=<token>` |
+| 手动汇报 | 在看板页面点击「📤 手动汇报到群」按钮 |
+| @触发汇报 | 在 WPS 群里 @机器人 + 关键词（汇报/状态/巡检/报告） |
+| 告警推送 | 自动推送（阈值触发/恢复时） |
+| API 调用 | `curl -X POST -H "X-Inspect-Token: <token>" http://<服务器IP>:8080/api/report` |
+
+### 触发关键词
+
+在 WPS 群里 @机器人 时，包含以下关键词会触发汇报：
+- `汇报`、`状态`、`巡检`、`报告`
+- `report`、`status`
+- `你好`、`hi`、`hello`
 
 ---
 
