@@ -73,7 +73,7 @@ async def main():
     )
     scheduler.start()
 
-    app = create_app(settings, _store)
+    app = create_app(settings, _store, notifier)
     config = uvicorn.Config(app, host=settings.dashboard.host, port=settings.dashboard.port, log_level="info")
     server = uvicorn.Server(config)
 

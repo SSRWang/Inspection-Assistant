@@ -1,17 +1,19 @@
 from __future__ import annotations
 import json
+from datetime import datetime, timezone
 from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.security import APIKeyHeader
 from fastapi.templating import Jinja2Templates
 from inspector.config import Settings
+from inspector.notifier import BaseNotifier
 from inspector.store import SqliteStore
 
 API_KEY_HEADER = APIKeyHeader(name="X-Inspect-Token", auto_error=False)
 
 
-def create_app(cfg: Settings, store: SqliteStore) -> FastAPI:
+def create_app(cfg: Settings, store: SqliteStore, notifier: BaseNotifier | None = None) -> FastAPI:
     app = FastAPI(title="GPU Node Inspector")
     templates = Jinja2Templates(directory="templates")
 
@@ -67,5 +69,41 @@ def create_app(cfg: Settings, store: SqliteStore) -> FastAPI:
     @app.get("/api/history")
     async def api_history(node: str | None = None, rule: str | None = None, limit: int = 100, _=Depends(verify_token)):
         return {"metrics": await store.list_metrics(node=node, rule=rule, limit=limit)}
+
+    @app.post("/api/report")
+    async def api_report(_=Depends(verify_token)):
+        """手动触发一次巡检报告推送到群（用于 @机器人 或手动调用）"""
+        if not notifier:
+            raise HTTPException(status_code=503, detail="Notifier not configured")
+
+        statuses = await store.list_node_status()
+        if not statuses:
+            raise HTTPException(status_code=404, detail="No node data available")
+
+        # 构建汇报消息
+        payload = {
+            "type": "periodic_report",
+            "title": "GPU 节点巡检报告",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "node_count": len(statuses),
+            "online_count": sum(1 for s in statuses if s["reachable"]),
+            "nodes": [
+                {
+                    "name": s["node"],
+                    "reachable": bool(s["reachable"]),
+                    "summary": s["summary"],
+                    "last_check_at": s["last_check_at"],
+                    "raw_metrics": s.get("raw_metrics"),
+                }
+                for s in statuses
+            ],
+        }
+
+        ok = await notifier.send(payload)
+        if not ok:
+            await store.enqueue_webhook(payload)
+            return {"status": "queued", "message": "Webhook send failed, queued for retry"}
+
+        return {"status": "sent", "message": "Report sent successfully"}
 
     return app

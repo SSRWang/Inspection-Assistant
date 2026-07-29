@@ -36,12 +36,15 @@ async def run_inspection_cycle(collector: Collector, alerter: Alerter, notifier:
 
             events = await alerter.evaluate(metrics)
             for event in events:
-                payload = _event_to_payload(event)
+                # 获取节点完整状态，用于告警推送时展示所有监控数据
+                node_status = await store.get_node_status(metrics.node)
+                payload = _event_to_payload(event, node_status)
                 ok = await notifier.send(payload)
                 if not ok:
                     await store.enqueue_webhook(payload)
 
-        await _send_periodic_report(store, notifier)
+        # 周期报告不再自动推送到群，只存数据库和看板
+        # 用户可通过 @机器人 或 API 手动触发汇报
         await store.cleanup_metrics(cfg.storage.retain_days)
     except Exception as e:
         logger.exception("Inspection cycle failed: %s", e)
@@ -87,8 +90,8 @@ async def _send_periodic_report(store: SqliteStore, notifier: BaseNotifier) -> N
         await store.enqueue_webhook(payload)
 
 
-def _event_to_payload(event) -> dict:
-    return {
+def _event_to_payload(event, node_status: dict | None = None) -> dict:
+    payload = {
         "type": event.type,
         "node": event.node,
         "rule": event.rule,
@@ -97,3 +100,7 @@ def _event_to_payload(event) -> dict:
         "message": event.message,
         "timestamp": event.timestamp.isoformat(),
     }
+    # 附加节点完整状态，用于告警推送时展示所有监控数据
+    if node_status:
+        payload["node_status"] = node_status
+    return payload
