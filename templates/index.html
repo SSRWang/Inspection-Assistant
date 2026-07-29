@@ -140,7 +140,20 @@
                     {% set cpu_output = s.raw.get('cpu','').strip() %}
                     {% for cpu_line in cpu_output.split('\n') %}
                     {% if 'Cpu(s)' in cpu_line or '%Cpu' in cpu_line %}
-                    <div class="metric-value">{{ cpu_line.strip() }}</div>
+                        {% set parts = cpu_line.split(',') %}
+                        {% set ns = namespace(user='', sys='', idle='') %}
+                        {% for part in parts %}
+                            {% if 'us' in part %}
+                                {% set ns.user = part.split()[0] %}
+                            {% elif 'sy' in part %}
+                                {% set ns.sys = part.split()[0] %}
+                            {% elif 'id' in part %}
+                                {% set ns.idle = part.split()[0] %}
+                            {% endif %}
+                        {% endfor %}
+                        <div class="metric-value">使用率 {{ (ns.user|float + ns.sys|float)|round(1) }}%</div>
+                        <div class="summary">用户 {{ ns.user }}% + 系统 {{ ns.sys }}%</div>
+                        <div class="summary">空闲: {{ ns.idle }}%</div>
                     {% endif %}
                     {% endfor %}
                 </div>
@@ -151,13 +164,38 @@
         <!-- Network -->
         {% if s.raw.get('ping','').strip() %}
         <div class="network-card metric-item" style="margin-top:0.75rem;">
-            <h3 style="margin:0 0 0.5rem 0; color:#d97706;">网络 Ping</h3>
+            <h3 style="margin:0 0 0.5rem 0; color:#d97706;">🌐 网络 Ping</h3>
             {% set ping_output = s.raw.get('ping','').strip() %}
+            {% set ns = namespace(loss='', avg='', target='') %}
             {% for ping_line in ping_output.split('\n') %}
-            {% if 'packet loss' in ping_line or 'rtt' in ping_line or 'min/avg' in ping_line %}
-            <p style="margin:0.15rem 0; font-size:0.88rem;">{{ ping_line.strip() }}</p>
-            {% endif %}
+                {% if 'packet loss' in ping_line %}
+                    {% set loss_parts = ping_line.split('%') %}
+                    {% set ns.loss = loss_parts[0].split()[-1] + '%' %}
+                {% endif %}
+                {% if 'rtt' in ping_line or 'min/avg' in ping_line %}
+                    {% set rtt_parts = ping_line.split('=') %}
+                    {% if rtt_parts|length > 1 %}
+                        {% set ns.avg = rtt_parts[1].strip().split('/')[1] %}
+                    {% endif %}
+                {% endif %}
+                {% if 'PING' in ping_line and '(' in ping_line %}
+                    {% set ns.target = ping_line.split('(')[1].split(')')[0] %}
+                {% endif %}
             {% endfor %}
+            <div class="metric-grid" style="grid-template-columns: repeat(3, 1fr);">
+                <div class="metric-item">
+                    <div class="metric-label">丢包率</div>
+                    <div class="metric-value">{{ ns.loss or '-' }}</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">平均延迟</div>
+                    <div class="metric-value">{{ ns.avg or '-' }} ms</div>
+                </div>
+                <div class="metric-item">
+                    <div class="metric-label">目标</div>
+                    <div class="metric-value">{{ ns.target or '-' }}</div>
+                </div>
+            </div>
         </div>
         {% endif %}
 
