@@ -1,12 +1,10 @@
 from __future__ import annotations
-import hashlib
 import json
 import logging
-import os
 from datetime import datetime, timezone
 from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.security import APIKeyHeader
 from fastapi.templating import Jinja2Templates
 from inspector.config import Settings
@@ -118,63 +116,37 @@ def create_app(cfg: Settings, store: SqliteStore, notifier: BaseNotifier | None 
     async def wps_callback(request: Request):
         """WPS 机器人回调接口 - 当用户 @机器人 时触发汇报
 
-        配置方法：
-        1. 进入 WPS 协作群 → 设置 → 群机器人 → 你的机器人 → 设置
-        2. 开启"接收消息"功能
-        3. 回调 URL 填写: http://你的服务器IP:8080/api/wps/callback
-        4. 在环境变量中配置 WPS_BOT_TOKEN（机器人 Token）
+        WPS 验证流程：
+        1. WPS 发送 GET 请求验证回调 URL，返回 {"result":"ok"}
+        2. 用户 @机器人时，WPS 发送 POST 请求，包含消息内容
         """
         try:
             body = await request.json()
         except Exception:
-            return PlainTextResponse("ok")  # WPS 需要 200 响应
+            return JSONResponse({"result": "ok"})
 
         logger.info("WPS callback received: %s", json.dumps(body, ensure_ascii=False)[:200])
 
-        # WPS 验证请求处理
-        msg_signature = body.get("msg_signature", "")
-        timestamp = body.get("timestamp", "")
-        nonce = body.get("nonce", "")
-        echostr = body.get("echostr", "")
-
-        # 如果有 echostr，这是验证请求，需要返回解密后的 echostr
-        if echostr:
-            # 获取 WPS 机器人 Token（从环境变量）
-            wps_token = os.environ.get("WPS_BOT_TOKEN", "")
-            if wps_token:
-                # 计算签名：Token + timestamp + nonce 字典序排序后拼接，SHA1
-                sorted_params = sorted([wps_token, timestamp, nonce])
-                sign_str = "".join(sorted_params)
-                calculated_signature = hashlib.sha1(sign_str.encode("utf-8")).hexdigest()
-
-                if calculated_signature == msg_signature:
-                    # 签名验证通过，返回 echostr
-                    logger.info("WPS callback verification success")
-                    return PlainTextResponse(echostr)
-                else:
-                    logger.warning("WPS callback signature mismatch, trying direct return")
-                    # 签名不匹配，但尝试直接返回 echostr（某些 WPS 版本可能不需要签名验证）
-                    return PlainTextResponse(echostr)
-            else:
-                # 没有配置 Token，直接返回 echostr
-                logger.warning("WPS_BOT_TOKEN not configured, returning echostr directly")
-                return PlainTextResponse(echostr)
-
         # 提取消息内容
-        msg_type = body.get("msg_type", "")
-        text = body.get("text", {}).get("text", "")
+        content = body.get("content", "")
 
         # 判断是否需要触发汇报
-        # 情况1: 明确的文本消息包含"汇报"或"状态"等关键词
-        # 情况2: 任何 @消息 都触发汇报（简单策略）
         should_report = False
 
-        if msg_type == "text":
-            keywords = ["汇报", "状态", "巡检", "报告", "report", "status", "你好", "hi", "hello"]
-            if any(kw in text.lower() for kw in keywords):
-                should_report = True
-            elif "@" in text:  # @消息
-                should_report = True
+        # WPS 的 content 格式: "@webhook机器人 汇报"
+        # 去掉 @机器人名字，检查关键词
+        text = content
+        if "@" in text:
+            # 移除 @机器人名字 部分
+            parts = text.split()
+            if len(parts) > 1:
+                text = " ".join(parts[1:])  # 取 @ 后面的内容
+
+        keywords = ["汇报", "状态", "巡检", "报告", "report", "status", "你好", "hi", "hello"]
+        if any(kw in text.lower() for kw in keywords):
+            should_report = True
+        elif content.startswith("@"):  # 任何 @消息 都触发
+            should_report = True
 
         if should_report and notifier:
             try:
@@ -203,15 +175,18 @@ def create_app(cfg: Settings, store: SqliteStore, notifier: BaseNotifier | None 
             except Exception:
                 logger.exception("WPS callback: failed to send report")
 
-        # WPS 需要返回 200 状态码
-        return PlainTextResponse("ok")
+        # WPS 需要返回 {"result":"ok"}
+        return JSONResponse({"result": "ok"})
 
     # ========== WPS 机器人 URL 验证接口 ==========
-    # WPS 机器人配置回调时会验证此接口
+    # WPS 机器人配置回调时会验证此接口（GET 请求）
 
     @app.get("/api/wps/callback")
     async def wps_verify():
-        """WPS 机器人回调 URL 验证接口"""
-        return PlainTextResponse("ok")
+        """WPS 机器人回调 URL 验证接口
+
+        WPS 验证流程：发送 GET 请求，返回 {"result":"ok"}
+        """
+        return JSONResponse({"result": "ok"})
 
     return app
