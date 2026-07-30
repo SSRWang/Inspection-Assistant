@@ -1,6 +1,8 @@
 from __future__ import annotations
+import hashlib
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Annotated
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -120,6 +122,7 @@ def create_app(cfg: Settings, store: SqliteStore, notifier: BaseNotifier | None 
         1. 进入 WPS 协作群 → 设置 → 群机器人 → 你的机器人 → 设置
         2. 开启"接收消息"功能
         3. 回调 URL 填写: http://你的服务器IP:8080/api/wps/callback
+        4. 在环境变量中配置 WPS_BOT_TOKEN（机器人 Token）
         """
         try:
             body = await request.json()
@@ -127,6 +130,33 @@ def create_app(cfg: Settings, store: SqliteStore, notifier: BaseNotifier | None 
             return PlainTextResponse("ok")  # WPS 需要 200 响应
 
         logger.info("WPS callback received: %s", json.dumps(body, ensure_ascii=False)[:200])
+
+        # WPS 验证请求处理
+        msg_signature = body.get("msg_signature", "")
+        timestamp = body.get("timestamp", "")
+        nonce = body.get("nonce", "")
+        echostr = body.get("echostr", "")
+
+        # 如果有 echostr，这是验证请求，需要返回解密后的 echostr
+        if echostr:
+            # 获取 WPS 机器人 Token（从环境变量）
+            wps_token = os.environ.get("WPS_BOT_TOKEN", "")
+            if wps_token:
+                # 计算签名：Token + timestamp + nonce 字典序排序后拼接，SHA1
+                sorted_params = sorted([wps_token, timestamp, nonce])
+                sign_str = "".join(sorted_params)
+                calculated_signature = hashlib.sha1(sign_str.encode("utf-8")).hexdigest()
+
+                if calculated_signature == msg_signature:
+                    # 签名验证通过，返回 echostr
+                    logger.info("WPS callback verification success")
+                    return PlainTextResponse(echostr)
+                else:
+                    logger.warning("WPS callback signature mismatch")
+                    return PlainTextResponse("signature error", status_code=403)
+            else:
+                logger.warning("WPS_BOT_TOKEN not configured")
+                return PlainTextResponse("token not configured", status_code=500)
 
         # 提取消息内容
         msg_type = body.get("msg_type", "")
